@@ -1,43 +1,45 @@
 import React, { useState } from 'react';
 import { Dashboard } from './components/Dashboard';
-import { StrategyBuilder } from './components/StrategyBuilder';
 import { DataImport } from './components/DataImport';
 import { CollectionQueue } from './components/CollectionQueue';
-import { CaseManagement } from './components/CaseManagement';
-import { Reports } from './components/Reports';
-import { UserManagement } from './components/UserManagement';
+import { CaseDetails } from './components/CaseDetails';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { LoginScreen } from './components/auth/LoginScreen';
 
-type ActiveView = 'dashboard' | 'strategy-builder' | 'data-import' | 'collection-queue' | 'case-management' | 'reports' | 'user-management';
+type ActiveView = 'dashboard' | 'data-import' | 'collection-queue' | 'case-details';
 
 function AppContent() {
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const { user } = useAuth();
 
   if (!user) {
     return <LoginScreen />;
   }
 
+  const handleSelectCase = (caseId: string) => {
+    setSelectedCaseId(caseId);
+    setActiveView('case-details');
+  };
+
+  const handleBackFromCaseDetails = () => {
+    setSelectedCaseId(null);
+    setActiveView('collection-queue');
+  };
+
   const renderActiveView = () => {
     switch (activeView) {
       case 'dashboard':
         return <Dashboard />;
-      case 'strategy-builder':
-        return <StrategyBuilder />;
       case 'data-import':
         return <DataImport />;
       case 'collection-queue':
-        return <CollectionQueue />;
-      case 'case-management':
-        return <CaseManagement />;
-      case 'reports':
-        return <Reports />;
-      case 'user-management':
-        return <UserManagement />;
+        return <CollectionQueue onSelectCase={handleSelectCase} />;
+      case 'case-details':
+        return <CaseDetails caseId={selectedCaseId} onBack={handleBackFromCaseDetails} />;
       default:
         return <Dashboard />;
     }

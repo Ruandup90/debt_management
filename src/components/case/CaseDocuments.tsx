@@ -1,75 +1,21 @@
 import React, { useState } from 'react';
-import { Account } from '../../types/account';
 import { Upload, FileText, Download, Eye, Trash2, Plus } from 'lucide-react';
+import { useData } from '../../contexts/DataContext';
 
 interface CaseDocumentsProps {
-  account: Account;
+  caseId: string;
 }
 
-interface Document {
-  id: string;
-  name: string;
-  type: string;
-  size: string;
-  uploadDate: string;
-  uploadedBy: string;
-  category: 'agreement' | 'correspondence' | 'legal' | 'identity' | 'other';
-}
-
-// Mock documents data
-const mockDocuments: Document[] = [
-  {
-    id: '1',
-    name: 'Original_Credit_Agreement.pdf',
-    type: 'PDF',
-    size: '2.4 MB',
-    uploadDate: '2024-01-15T10:30:00',
-    uploadedBy: 'System',
-    category: 'agreement'
-  },
-  {
-    id: '2',
-    name: 'Customer_ID_Copy.jpg',
-    type: 'Image',
-    size: '1.2 MB',
-    uploadDate: '2024-02-05T14:20:00',
-    uploadedBy: 'Mike Johnson',
-    category: 'identity'
-  },
-  {
-    id: '3',
-    name: 'Payment_Plan_Agreement.pdf',
-    type: 'PDF',
-    size: '890 KB',
-    uploadDate: '2024-02-10T16:45:00',
-    uploadedBy: 'Mike Johnson',
-    category: 'agreement'
-  }
-];
-
-export function CaseDocuments({ account }: CaseDocumentsProps) {
-  const [documents, setDocuments] = useState<Document[]>(mockDocuments);
+export function CaseDocuments({ caseId }: CaseDocumentsProps) {
+  const { getCaseById, addDocument } = useData();
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'agreement':
-        return 'text-blue-600 bg-blue-100';
-      case 'correspondence':
-        return 'text-green-600 bg-green-100';
-      case 'legal':
-        return 'text-red-600 bg-red-100';
-      case 'identity':
-        return 'text-purple-600 bg-purple-100';
-      default:
-        return 'text-gray-600 bg-gray-100';
-    }
-  };
+  const caseData = getCaseById(caseId);
 
-  const getFileIcon = (type: string) => {
-    return <FileText className="w-8 h-8 text-gray-400" />;
-  };
+  if (!caseData) {
+    return <div>Case not found</div>;
+  }
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -99,16 +45,14 @@ export function CaseDocuments({ account }: CaseDocumentsProps) {
 
   const handleFileUpload = (files: File[]) => {
     files.forEach(file => {
-      const newDocument: Document = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      addDocument(caseId, {
         name: file.name,
         type: file.type.includes('pdf') ? 'PDF' : file.type.includes('image') ? 'Image' : 'Document',
-        size: formatFileSize(file.size),
+        size: file.size,
         uploadDate: new Date().toISOString(),
         uploadedBy: 'Current User',
-        category: 'other'
-      };
-      setDocuments(prev => [newDocument, ...prev]);
+        url: URL.createObjectURL(file) // In a real app, this would be uploaded to a server
+      });
     });
     setShowUploadForm(false);
   };
@@ -121,11 +65,14 @@ export function CaseDocuments({ account }: CaseDocumentsProps) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handleDeleteDocument = (docId: string) => {
-    if (confirm('Are you sure you want to delete this document?')) {
-      setDocuments(prev => prev.filter(doc => doc.id !== docId));
-    }
+  const getFileIcon = (type: string) => {
+    return <FileText className="w-8 h-8 text-gray-400" />;
   };
+
+  // Sort documents by upload date (newest first)
+  const sortedDocuments = [...caseData.documents].sort((a, b) => 
+    new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
+  );
 
   return (
     <div className="space-y-6">
@@ -143,7 +90,7 @@ export function CaseDocuments({ account }: CaseDocumentsProps) {
 
       {/* Upload Form */}
       {showUploadForm && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
           <h4 className="text-md font-semibold text-gray-900 mb-4">Upload New Document</h4>
           
           <div
@@ -191,64 +138,40 @@ export function CaseDocuments({ account }: CaseDocumentsProps) {
         </div>
       )}
 
-      {/* Document Categories */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {['agreement', 'correspondence', 'legal', 'identity', 'other'].map(category => (
-          <div key={category} className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-            <div className="text-2xl font-bold text-gray-900">
-              {documents.filter(doc => doc.category === category).length}
-            </div>
-            <div className="text-sm text-gray-600 capitalize">{category}</div>
-          </div>
-        ))}
-      </div>
-
       {/* Documents List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h4 className="text-lg font-semibold text-gray-900">All Documents</h4>
-        </div>
-        
-        {documents.length > 0 ? (
-          <div className="divide-y divide-gray-200">
-            {documents.map((document) => (
-              <div key={document.id} className="p-6 flex items-center justify-between hover:bg-gray-50">
-                <div className="flex items-center space-x-4">
-                  {getFileIcon(document.type)}
-                  <div>
-                    <h4 className="font-medium text-gray-900">{document.name}</h4>
-                    <div className="flex items-center space-x-4 text-sm text-gray-600">
-                      <span>{document.type}</span>
-                      <span>{document.size}</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getCategoryColor(document.category)}`}>
-                        {document.category}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Uploaded by {document.uploadedBy} on {new Date(document.uploadDate).toLocaleDateString()}
-                    </p>
+      <div className="space-y-4">
+        {sortedDocuments.length > 0 ? (
+          sortedDocuments.map((document) => (
+            <div key={document.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex items-center justify-between hover:bg-gray-50">
+              <div className="flex items-center space-x-4">
+                {getFileIcon(document.type)}
+                <div>
+                  <h4 className="font-medium text-gray-900">{document.name}</h4>
+                  <div className="flex items-center space-x-4 text-sm text-gray-600">
+                    <span>{document.type}</span>
+                    <span>{formatFileSize(document.size)}</span>
                   </div>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <button className="text-blue-600 hover:text-blue-900 p-2">
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  <button className="text-green-600 hover:text-green-900 p-2">
-                    <Download className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteDocument(document.id)}
-                    className="text-red-600 hover:text-red-900 p-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Uploaded by {document.uploadedBy} on {new Date(document.uploadDate).toLocaleDateString()}
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
+              
+              <div className="flex items-center space-x-2">
+                <button className="text-blue-600 hover:text-blue-900 p-2">
+                  <Eye className="w-4 h-4" />
+                </button>
+                <button className="text-green-600 hover:text-green-900 p-2">
+                  <Download className="w-4 h-4" />
+                </button>
+                <button className="text-red-600 hover:text-red-900 p-2">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))
         ) : (
-          <div className="p-8 text-center">
+          <div className="text-center py-8">
             <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h4 className="text-lg font-medium text-gray-900 mb-2">No Documents</h4>
             <p className="text-gray-600">Upload documents to start building the case file</p>

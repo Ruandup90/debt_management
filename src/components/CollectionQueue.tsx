@@ -1,75 +1,68 @@
 import React, { useState } from 'react';
-import { Search, Filter, Phone, Mail, MessageSquare, Calendar, User, DollarSign, Clock, AlertCircle } from 'lucide-react';
-import { QueueFilters } from './queue/QueueFilters';
-import { AccountCard } from './queue/AccountCard';
-import { BulkActions } from './queue/BulkActions';
-import { Account } from '../types/account';
-import { mockAccounts } from '../data/mockAccounts';
+import { Search, Filter, Phone, Mail, MessageSquare } from 'lucide-react';
+import { useData } from '../contexts/DataContext';
+import { CollectionCase } from '../types/data';
 
-export function CollectionQueue() {
-  const [accounts, setAccounts] = useState<Account[]>(mockAccounts);
-  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
+interface CollectionQueueProps {
+  onSelectCase: (caseId: string) => void;
+}
+
+export function CollectionQueue({ onSelectCase }: CollectionQueueProps) {
+  const { collectionCases, addActivity } = useData();
   const [searchQuery, setSearchQuery] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [sortBy, setSortBy] = useState<string>('priority');
-  const [filterBy, setFilterBy] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
 
-  // Show accounts with strategy-applied actions first
-  const filteredAccounts = accounts
-    .filter(account => {
+  // Filter and sort cases
+  const filteredCases = collectionCases
+    .filter(c => {
       const matchesSearch = 
-        account.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        account.accountNumber.includes(searchQuery) ||
-        account.customerId.includes(searchQuery);
+        c.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.accountNumber.toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchesFilter = filterBy === 'all' || account.delinquencyBand === filterBy;
+      const matchesPriority = priorityFilter === 'all' || c.priority.toString() === priorityFilter;
       
-      return matchesSearch && matchesFilter;
+      return matchesSearch && matchesPriority && c.status === 'active';
     })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'priority':
-          // Prioritize accounts with next actions
-          if (a.nextAction && !b.nextAction) return -1;
-          if (!a.nextAction && b.nextAction) return 1;
-          return b.priority - a.priority;
-        case 'balance':
-          return b.currentBalance - a.currentBalance;
-        case 'daysPastDue':
-          return b.daysPastDue - a.daysPastDue;
-        case 'lastContact':
-          return new Date(b.lastContactDate).getTime() - new Date(a.lastContactDate).getTime();
-        default:
-          return 0;
-      }
+    .sort((a, b) => a.priority - b.priority); // Sort by priority (1 = highest)
+
+  const handleQuickAction = (caseItem: CollectionCase, actionType: 'call' | 'email' | 'sms') => {
+    const actionDescriptions = {
+      call: 'Made phone call to customer',
+      email: 'Sent email to customer',
+      sms: 'Sent SMS to customer'
+    };
+
+    addActivity(caseItem.id, {
+      type: actionType,
+      description: actionDescriptions[actionType],
+      date: new Date().toISOString(),
+      createdBy: 'Current User'
     });
-
-  const handleAccountSelect = (accountId: string, selected: boolean) => {
-    if (selected) {
-      setSelectedAccounts(prev => [...prev, accountId]);
-    } else {
-      setSelectedAccounts(prev => prev.filter(id => id !== accountId));
-    }
-  };
-
-  const handleSelectAll = () => {
-    if (selectedAccounts.length === filteredAccounts.length) {
-      setSelectedAccounts([]);
-    } else {
-      setSelectedAccounts(filteredAccounts.map(account => account.id));
-    }
   };
 
   const getPriorityColor = (priority: number) => {
-    if (priority >= 8) return 'text-red-600 bg-red-100';
-    if (priority >= 5) return 'text-amber-600 bg-amber-100';
-    return 'text-green-600 bg-green-100';
+    switch (priority) {
+      case 1: return 'text-red-600 bg-red-100';
+      case 2: return 'text-orange-600 bg-orange-100';
+      case 3: return 'text-yellow-600 bg-yellow-100';
+      case 4: return 'text-blue-600 bg-blue-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
   };
 
-  const getPriorityLabel = (priority: number) => {
-    if (priority >= 8) return 'High';
-    if (priority >= 5) return 'Medium';
-    return 'Low';
+  const getDelinquencyColor = (state: string) => {
+    switch (state) {
+      case 'current': return 'text-green-600 bg-green-100';
+      case 'early': return 'text-blue-600 bg-blue-100';
+      case 'moderate': return 'text-yellow-600 bg-yellow-100';
+      case 'severe': return 'text-orange-600 bg-orange-100';
+      case 'critical': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
   return (
@@ -79,14 +72,8 @@ export function CollectionQueue() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Collection Queue</h1>
           <p className="text-gray-600 mt-2">
-            {filteredAccounts.length} accounts • {selectedAccounts.length} selected
+            {filteredCases.length} cases • Sorted by priority (highest first)
           </p>
-        </div>
-        <div className="flex items-center space-x-3">
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
-            <Calendar className="w-4 h-4 mr-2" />
-            Schedule Campaign
-          </button>
         </div>
       </div>
 
@@ -97,7 +84,7 @@ export function CollectionQueue() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Search by name, account number, or customer ID..."
+              placeholder="Search by customer name or account number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -105,132 +92,122 @@ export function CollectionQueue() {
           </div>
           <div className="flex items-center space-x-3">
             <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
               className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="priority">Sort by Priority</option>
-              <option value="balance">Sort by Balance</option>
-              <option value="daysPastDue">Sort by Days Past Due</option>
-              <option value="lastContact">Sort by Last Contact</option>
+              <option value="all">All Priorities</option>
+              <option value="1">Priority 1 (Highest)</option>
+              <option value="2">Priority 2</option>
+              <option value="3">Priority 3</option>
+              <option value="4">Priority 4</option>
+              <option value="5">Priority 5 (Lowest)</option>
             </select>
-            <select
-              value={filterBy}
-              onChange={(e) => setFilterBy(e.target.value)}
-              className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Accounts</option>
-              <option value="A">Current</option>
-              <option value="B">1-2 Days</option>
-              <option value="C">3-7 Days</option>
-              <option value="D">8-30 Days</option>
-              <option value="E">31-60 Days</option>
-              <option value="F">60+ Days</option>
-            </select>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center"
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              Filters
-            </button>
-          </div>
-        </div>
-
-        {showFilters && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <QueueFilters />
-          </div>
-        )}
-      </div>
-
-      {/* Bulk Actions */}
-      {selectedAccounts.length > 0 && (
-        <BulkActions
-          selectedCount={selectedAccounts.length}
-          onClearSelection={() => setSelectedAccounts([])}
-        />
-      )}
-
-      {/* Queue Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Strategy Actions</p>
-              <p className="text-2xl font-bold text-red-600">
-                {filteredAccounts.filter(a => a.nextAction && a.nextAction !== 'No strategy defined').length}
-              </p>
-            </div>
-            <AlertCircle className="w-8 h-8 text-red-500" />
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Balance</p>
-              <p className="text-2xl font-bold text-gray-900">
-                ${filteredAccounts.reduce((sum, a) => sum + a.currentBalance, 0).toLocaleString()}
-              </p>
-            </div>
-            <DollarSign className="w-8 h-8 text-green-500" />
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Avg Days Past Due</p>
-              <p className="text-2xl font-bold text-amber-600">
-                {Math.round(filteredAccounts.reduce((sum, a) => sum + a.daysPastDue, 0) / filteredAccounts.length)}
-              </p>
-            </div>
-            <Clock className="w-8 h-8 text-amber-500" />
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Ready for Action</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {filteredAccounts.filter(a => a.nextAction && !a.nextAction.includes('Wait')).length}
-              </p>
-            </div>
-            <Phone className="w-8 h-8 text-blue-500" />
           </div>
         </div>
       </div>
 
-      {/* Account List */}
+      {/* Cases List */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Collection Queue 
-              <span className="text-sm font-normal text-gray-600 ml-2">
-                (Strategy-driven prioritization)
-              </span>
-            </h3>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={selectedAccounts.length === filteredAccounts.length && filteredAccounts.length > 0}
-                onChange={handleSelectAll}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label className="text-sm text-gray-600">Select All</label>
-            </div>
-          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Active Collection Cases</h3>
         </div>
         <div className="divide-y divide-gray-200">
-          {filteredAccounts.map(account => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              isSelected={selectedAccounts.includes(account.id)}
-              onSelect={(selected) => handleAccountSelect(account.id, selected)}
-            />
+          {filteredCases.map(caseItem => (
+            <div key={caseItem.id} className="p-6 hover:bg-gray-50 transition-colors">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 
+                      className="text-lg font-semibold text-gray-900 cursor-pointer hover:text-blue-600"
+                      onClick={() => onSelectCase(caseItem.id)}
+                    >
+                      {caseItem.customerName}
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${getPriorityColor(caseItem.priority)}`}>
+                        Priority {caseItem.priority}
+                      </span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${getDelinquencyColor(caseItem.delinquencyState)}`}>
+                        {caseItem.delinquencyState}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <div>
+                      <p className="text-xs text-gray-500">Account Number</p>
+                      <p className="font-medium text-gray-900">{caseItem.accountNumber}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Outstanding Balance</p>
+                      <p className="font-bold text-lg text-red-600">{formatCurrency(caseItem.outstandingBalance)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Days in Arrears</p>
+                      <p className="font-medium text-gray-900">{caseItem.totalDaysInArrears} days</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Last Payment</p>
+                      <p className="font-medium text-gray-900">{formatCurrency(caseItem.lastPaymentAmount)}</p>
+                      <p className="text-xs text-gray-500">{new Date(caseItem.lastPaymentDate).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4 text-sm text-gray-600">
+                      <span>Last actioned: {new Date(caseItem.lastActionedDate).toLocaleDateString()}</span>
+                      <span>Duration: {caseItem.durationInCollections} days</span>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      {/* Next Action */}
+                      <div className="flex items-center space-x-1 text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded-full">
+                        <span className="font-medium">Next: {caseItem.nextAction}</span>
+                      </div>
+                      
+                      {/* Quick Actions */}
+                      <button
+                        onClick={() => handleQuickAction(caseItem, 'call')}
+                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                        title="Make Call"
+                      >
+                        <Phone className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleQuickAction(caseItem, 'email')}
+                        className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                        title="Send Email"
+                      >
+                        <Mail className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleQuickAction(caseItem, 'sms')}
+                        className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
+                        title="Send SMS"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
+        
+        {filteredCases.length === 0 && (
+          <div className="p-8 text-center">
+            <div className="text-4xl mb-4">📋</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Cases Found</h3>
+            <p className="text-gray-600">
+              {searchQuery || priorityFilter !== 'all' 
+                ? 'Try adjusting your search or filter criteria'
+                : 'All collection cases have been resolved'
+              }
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'manager' | 'supervisor' | 'collector';
+  role: 'admin' | 'manager' | 'collector';
 }
 
 interface AuthContextType {
@@ -29,12 +29,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>({
-    id: '1',
-    email: 'admin@debtflow.com',
-    name: 'John Administrator',
-    role: 'admin'
-  });
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -43,7 +38,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Mock authentication - in real app, this would call an API
+    // Mock authentication
     const mockUsers = [
       { id: '1', email: 'admin@debtflow.com', name: 'John Administrator', role: 'admin' as const },
       { id: '2', email: 'manager@debtflow.com', name: 'Sarah Manager', role: 'manager' as const },
